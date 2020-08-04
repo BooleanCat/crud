@@ -1,7 +1,10 @@
 package main
 
-import "fmt"
+import (
+	"net/http"
+)
 
 func main() {
-	fmt.Println("vim-go")
+	http.HandleFunc("/ping", func(_ http.ResponseWriter, _ *http.Request) {})
+	_ = http.ListenAndServe(":9092", nil)
 }
