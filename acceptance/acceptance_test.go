@@ -1,43 +1,78 @@
 package acceptance_test
 
 import (
+	"bytes"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("Acceptance", func() {
-	var cmd *exec.Cmd
+	var (
+		cmd     *exec.Cmd
+		workDir string
+	)
 
 	BeforeEach(func() {
-		cmd = exec.Command(binaryPath)
+		workDir = tempDir("", "")
+
+		cmd = exec.Command(binaryPath, "--store", workDir)
+		cmd.Stdout = GinkgoWriter
+		cmd.Stderr = GinkgoWriter
+	})
+
+	JustBeforeEach(func() {
 		Expect(cmd.Start()).To(Succeed())
+		Eventually(ping("http://127.0.0.1:9092")).Should(Succeed())
 	})
 
 	AfterEach(func() {
 		Expect(cmd.Process.Signal(os.Interrupt)).To(Succeed())
-		_, _ = cmd.Process.Wait()
+		_, err := cmd.Process.Wait()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(os.RemoveAll(workDir)).To(Succeed())
 	})
 
-	It("responds to a health GET request", func() {
-		ping := func() error {
-			response, err := http.Get("http://127.0.0.1:9092/ping")
-			if err != nil {
-				return err
-			}
-			_ = response.Body.Close()
+	Describe("/Create/filename", func() {
+		It("stores a file", func() {
+			request, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:9092/Create/bar", bytes.NewBufferString("foobar"))
+			Expect(err).NotTo(HaveOccurred())
 
-			if response.StatusCode != http.StatusOK {
-				return fmt.Errorf("unexpected response code %d", response.StatusCode)
-			}
+			response, err := http.DefaultClient.Do(request)
+			Expect(err).NotTo(HaveOccurred())
+			defer response.Body.Close()
 
-			return nil
-			}
+			By("responding with 200 OK", func() {
+				Expect(response.StatusCode).To(Equal(http.StatusOK))
+			})
 
-		Eventually(ping).Should(Succeed())
+			By("by storing the contents of the request body", func() {
+				body, err := ioutil.ReadFile(filepath.Join(workDir, "bar"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(string(body)).To(Equal("foobar"))
+			})
+		})
 	})
 })
+
+func ping(url string) func() error {
+	return func() error {
+		response, err := http.Get(url + "/ping")
+		if err != nil {
+			return err
+		}
+		_ = response.Body.Close()
+
+		if response.StatusCode != http.StatusOK {
+			return fmt.Errorf("unexpected response code %d", response.StatusCode)
+		}
+
+		return nil
+	}
+}
