@@ -64,18 +64,54 @@ var _ = Describe("Acceptance", func() {
 		It("reads a file", func() {
 			Expect(create()).To(BeNil())
 
-			readResp, err := http.Get("http://127.0.0.1:9092/Read/bar")
+			resp, err := http.Get("http://127.0.0.1:9092/Read/bar")
 			Expect(err).NotTo(HaveOccurred())
-			defer readResp.Body.Close()
+			defer resp.Body.Close()
 
 			By("responding with 200 OK", func() {
-				Expect(readResp.StatusCode).To(Equal(http.StatusOK))
+				Expect(resp.StatusCode).To(Equal(http.StatusOK))
 			})
 
 			By("responding with the content of that file", func() {
-				body, err := ioutil.ReadAll(readResp.Body)
+				body, err := ioutil.ReadAll(resp.Body)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(string(body)).To(Equal("Content: foobar"))
+			})
+		})
+	})
+
+	Describe("/Update/filename", func() {
+		It("updates a file", func() {
+			Expect(create()).To(BeNil())
+
+			req, err := http.NewRequest(http.MethodPost, "http://127.0.0.1:9092/Update/bar", bytes.NewBufferString("barfoo"))
+			Expect(err).NotTo(HaveOccurred())
+
+			resp, err := http.DefaultClient.Do(req)
+			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+
+			By("responding with 200 OK", func() {
+				Expect(resp.StatusCode).To(Equal(http.StatusOK))
+			})
+
+			By("by storing the contents of the request body", func() {
+				body, err := ioutil.ReadFile(filepath.Join(workDir, "bar"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(string(body)).To(Equal("barfoo"))
+			})
+		})
+
+		It("cannot update a non-existant file", func() {
+			req, err := http.NewRequest(http.MethodPost, "http://127.0.0.1:9092/Update/foo", bytes.NewBufferString("barfoo"))
+			Expect(err).NotTo(HaveOccurred())
+
+			resp, err := http.DefaultClient.Do(req)
+			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+
+			By("by responding with a 404 error code", func() {
+				Expect(resp.StatusCode).To(Equal(http.StatusNotFound))
 			})
 		})
 	})
@@ -97,12 +133,16 @@ func ping(url string) func() error {
 	}
 }
 
-func create() func() error {
+func create() error {
 	request, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:9092/Create/bar", bytes.NewBufferString("foobar"))
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil {
+		return err
+	}
 
 	_, err = http.DefaultClient.Do(request)
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

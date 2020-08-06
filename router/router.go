@@ -2,6 +2,7 @@ package router
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -24,18 +25,16 @@ func Router(store string) *chi.Mux {
 		r.Get("/{filename}", read(store))
 	})
 
+	router.Route("/Update", func(r chi.Router) {
+		r.Post("/{filename}", update(store))
+	})
+
 	return router
 }
 
 func create(store string) func(_ http.ResponseWriter, req *http.Request) {
 	return func(_ http.ResponseWriter, req *http.Request) {
-		content, err := ioutil.ReadAll(req.Body)
-		if err != nil {
-			panic(err)
-		}
-		if err = ioutil.WriteFile(filepath.Join(store, chi.URLParam(req, "filename")), content, os.ModePerm); err != nil {
-			panic(err)
-		}
+		writeFile(store, req)
 	}
 }
 
@@ -45,6 +44,35 @@ func read(store string) func(_ http.ResponseWriter, req *http.Request) {
 		if err != nil {
 			panic(err)
 		}
-		w.Write([]byte(fmt.Sprintf("Content: %s", content)))
+
+		_, err = io.WriteString(w, fmt.Sprintf("Content: %s", content))
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}
+}
+
+func update(store string) func(_ http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+		_, err := os.Stat(filepath.Join(store, chi.URLParam(req, "filename")))
+		if err != nil {
+			if os.IsNotExist(err) {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		writeFile(store, req)
+	}
+}
+
+func writeFile(store string, req *http.Request) {
+	content, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		panic(err)
+	}
+	if err = ioutil.WriteFile(filepath.Join(store, chi.URLParam(req, "filename")), content, os.ModePerm); err != nil {
+		panic(err)
 	}
 }
