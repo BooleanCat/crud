@@ -29,6 +29,10 @@ func Router(store string) *chi.Mux {
 		r.Post("/{filename}", update(store))
 	})
 
+	router.Route("/Delete", func(r chi.Router) {
+		r.Delete("/{filename}", delete(store))
+	})
+
 	return router
 }
 
@@ -55,15 +59,26 @@ func read(store string) func(_ http.ResponseWriter, req *http.Request) {
 func update(store string) func(_ http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
 		_, err := os.Stat(filepath.Join(store, chi.URLParam(req, "filename")))
-		if err != nil {
-			if os.IsNotExist(err) {
-				w.WriteHeader(http.StatusNotFound)
-				return
-			}
-			w.WriteHeader(http.StatusInternalServerError)
+		isFileExists(err, w)
+		writeFile(store, req)
+	}
+}
+
+func delete(store string) func(_ http.ResponseWriter, req *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+		err := os.Remove(filepath.Join(store, chi.URLParam(req, "filename")))
+		isFileExists(err, w)
+	}
+}
+
+func isFileExists(err error, w http.ResponseWriter) {
+	if err != nil {
+		if os.IsNotExist(err) {
+			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		writeFile(store, req)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 }
 

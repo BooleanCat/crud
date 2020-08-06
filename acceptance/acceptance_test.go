@@ -115,6 +115,42 @@ var _ = Describe("Acceptance", func() {
 			})
 		})
 	})
+
+	Describe("/Delete/filename", func() {
+		It("deletes an existing file", func() {
+			Expect(create()).To(BeNil())
+
+			req, err := http.NewRequest(http.MethodDelete, "http://127.0.0.1:9092/Delete/bar", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			resp, err := http.DefaultClient.Do(req)
+			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+
+			By("responding with 200 OK", func() {
+				Expect(resp.StatusCode).To(Equal(http.StatusOK))
+			})
+
+			By("by ensuring that the existing named file is deleted from the store", func() {
+				body, err := ioutil.ReadFile(filepath.Join(workDir, "bar"))
+				Expect(err).To(HaveOccurred())
+				Expect(string(body)).NotTo(Equal("foobar"))
+			})
+		})
+
+		It("cannot delete a non-existant file", func() {
+			req, err := http.NewRequest(http.MethodDelete, "http://127.0.0.1:9092/Delete/foobar", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			resp, err := http.DefaultClient.Do(req)
+			Expect(err).NotTo(HaveOccurred())
+			defer resp.Body.Close()
+
+			By("by responding with a 404 error code", func() {
+				Expect(resp.StatusCode).To(Equal(http.StatusNotFound))
+			})
+		})
+	})
 })
 
 func ping(url string) func() error {
