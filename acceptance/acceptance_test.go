@@ -59,6 +59,26 @@ var _ = Describe("Acceptance", func() {
 			})
 		})
 	})
+
+	Describe("/Read/filename", func() {
+		It("reads a file", func() {
+			Expect(create()).To(BeNil())
+
+			readResp, err := http.Get("http://127.0.0.1:9092/Read/bar")
+			Expect(err).NotTo(HaveOccurred())
+			defer readResp.Body.Close()
+
+			By("responding with 200 OK", func() {
+				Expect(readResp.StatusCode).To(Equal(http.StatusOK))
+			})
+
+			By("responding with the content of that file", func() {
+				body, err := ioutil.ReadAll(readResp.Body)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(string(body)).To(Equal("Content: foobar"))
+			})
+		})
+	})
 })
 
 func ping(url string) func() error {
@@ -75,4 +95,14 @@ func ping(url string) func() error {
 
 		return nil
 	}
+}
+
+func create() func() error {
+	request, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:9092/Create/bar", bytes.NewBufferString("foobar"))
+	Expect(err).NotTo(HaveOccurred())
+
+	_, err = http.DefaultClient.Do(request)
+	Expect(err).NotTo(HaveOccurred())
+
+	return nil
 }
