@@ -1,13 +1,11 @@
 package router
 
 import (
-	"fmt"
-	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
 
+	"github.com/BooleanCat/crud/crud"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 )
@@ -37,20 +35,16 @@ func Router(store string) *chi.Mux {
 }
 
 func create(store string) func(_ http.ResponseWriter, req *http.Request) {
-	return func(_ http.ResponseWriter, req *http.Request) {
-		writeFile(store, req)
+	return func(w http.ResponseWriter, req *http.Request) {
+		if err := crud.Create(filepath.Join(store, chi.URLParam(req, "filename")), req.Body); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 	}
 }
 
 func read(store string) func(_ http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
-		content, err := ioutil.ReadFile(filepath.Join(store, chi.URLParam(req, "filename")))
-		if err != nil {
-			panic(err)
-		}
-
-		_, err = io.WriteString(w, fmt.Sprintf("Content: %s", content))
-		if err != nil {
+		if err := crud.ReadInto(filepath.Join(store, chi.URLParam(req, "filename")), w); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	}
@@ -58,36 +52,32 @@ func read(store string) func(_ http.ResponseWriter, req *http.Request) {
 
 func update(store string) func(_ http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
-		_, err := os.Stat(filepath.Join(store, chi.URLParam(req, "filename")))
-		isFileExists(err, w)
-		writeFile(store, req)
+		err := crud.Update(filepath.Join(store, chi.URLParam(req, "filename")), req.Body)
+		if err == nil {
+			return
+		}
+
+		if os.IsNotExist(err) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		w.WriteHeader(http.StatusInternalServerError)
 	}
 }
 
 func delete(store string) func(_ http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
-		err := os.Remove(filepath.Join(store, chi.URLParam(req, "filename")))
-		isFileExists(err, w)
-	}
-}
+		err := crud.Delete(filepath.Join(store, chi.URLParam(req, "filename")))
+		if err == nil {
+			return
+		}
 
-func isFileExists(err error, w http.ResponseWriter) {
-	if err != nil {
 		if os.IsNotExist(err) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-}
 
-func writeFile(store string, req *http.Request) {
-	content, err := ioutil.ReadAll(req.Body)
-	if err != nil {
-		panic(err)
-	}
-	if err = ioutil.WriteFile(filepath.Join(store, chi.URLParam(req, "filename")), content, os.ModePerm); err != nil {
-		panic(err)
+		w.WriteHeader(http.StatusInternalServerError)
 	}
 }

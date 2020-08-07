@@ -75,7 +75,7 @@ var _ = Describe("Acceptance", func() {
 			By("responding with the content of that file", func() {
 				body, err := ioutil.ReadAll(resp.Body)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(string(body)).To(Equal("Content: foobar"))
+				Expect(string(body)).To(Equal("foobar"))
 			})
 		})
 	})

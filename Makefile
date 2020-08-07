@@ -3,7 +3,7 @@
 ginkgo := go run github.com/onsi/ginkgo/ginkgo --race --randomizeAllSpecs
 
 test: build/crud lint
-	$(ginkgo) acceptance
+	$(ginkgo) -r
 
 build/crud:
 	go build -o build/crud .
